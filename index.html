@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Convergence — Multi-Agent AI Orchestration</title>
+  <meta name="description" content="A Windows desktop app that orchestrates a structured multi-round debate between Claude, GPT, Gemini, and Grok — then synthesizes a unified answer. Free to download." />
+  <link rel="icon" type="image/png" href="favicon.png" />
+
+  <!-- Fonts: JetBrains Mono (terminal) + Space Mono (display) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ============ RESET & BASE ============ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0e0d;
+      --bg-deep: #050807;
+      --panel: #0f1614;
+      --panel-border: #1a2622;
+      --green: #9fef00;
+      --green-dim: #7ab800;
+      --green-glow: rgba(159, 239, 0, 0.4);
+      --red: #ff003c;
+      --red-glow: rgba(255, 0, 60, 0.5);
+      --text: #c8d4d1;
+      --text-dim: #6b7d77;
+      --text-faint: #3d4944;
+      --mono: 'JetBrains Mono', 'Courier New', monospace;
+      --display: 'Space Mono', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 15px;
+      line-height: 1.7;
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Scanline overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent 0,
+        transparent 2px,
+        rgba(159, 239, 0, 0.015) 2px,
+        rgba(159, 239, 0, 0.015) 3px
+      );
+      z-index: 1000;
+    }
+
+    /* Vignette */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.5) 100%);
+      z-index: 999;
+    }
+
+    /* Subtle grid background */
+    .grid-bg {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image:
+        linear-gradient(rgba(159, 239, 0, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(159, 239, 0, 0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ============ NAV ============ */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(10, 14, 13, 0.85);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--panel-border);
+      padding: 18px 0;
+    }
+    nav .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    nav .logo {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--green);
+      text-shadow: 0 0 12px var(--green-glow);
+      letter-spacing: 1px;
+    }
+    nav .logo::before {
+      content: '> ';
+      color: var(--text-dim);
+    }
+    nav .links { display: flex; gap: 28px; }
+    nav .links a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 13px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+    nav .links a:hover { color: var(--green); }
+
+    /* ============ HERO ============ */
+    .hero {
+      min-height: 92vh;
+      display: flex;
+      align-items: center;
+      position: relative;
+      padding: 80px 32px;
+      z-index: 2;
+    }
+    .hero-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+      position: relative;
+    }
+    .hero-tag {
+      display: inline-block;
+      font-size: 12px;
+      letter-spacing: 3px;
+      color: var(--green);
+      border: 1px solid var(--green-dim);
+      padding: 8px 16px;
+      margin-bottom: 32px;
+      text-transform: uppercase;
+      background: rgba(159, 239, 0, 0.05);
+    }
+    .hero-tag::before { content: '[ '; }
+    .hero-tag::after { content: ' ]'; }
+
+    .hero h1 {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: clamp(2.5rem, 7vw, 5.5rem);
+      line-height: 1.05;
+      letter-spacing: -2px;
+      margin-bottom: 24px;
+      color: #fff;
+    }
+    .hero h1 .accent {
+      color: var(--green);
+      text-shadow: 0 0 30px var(--green-glow);
+      position: relative;
+      display: inline-block;
+    }
+    .hero h1 .accent::after {
+      content: '_';
+      animation: blink 1s steps(2) infinite;
+      color: var(--green);
+    }
+
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+
+    .hero .subhead {
+      font-size: 1.15rem;
+      color: var(--text);
+      max-width: 720px;
+      margin-bottom: 24px;
+      line-height: 1.7;
+    }
+    .hero .subhead strong { color: var(--green); font-weight: 600; }
+
+    .hero .meta-line {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 48px;
+      letter-spacing: 1px;
+    }
+    .hero .meta-line span { color: var(--green); }
+
+    /* ============ DOWNLOAD BUTTON ============ */
+    .cta-row {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-download {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      background: var(--red);
+      color: #fff;
+      padding: 22px 40px;
+      border: 2px solid var(--red);
+      font-family: var(--mono);
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow:
+        0 0 30px var(--red-glow),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+      animation: pulse-red 2.5s ease-in-out infinite;
+      overflow: hidden;
+    }
+    .btn-download::before {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: left 0.5s;
+    }
+    .btn-download:hover::before { left: 100%; }
+    .btn-download:hover {
+      background: #ff1a4f;
+      box-shadow: 0 0 50px var(--red-glow), 0 0 80px rgba(255, 0, 60, 0.3);
+      transform: translateY(-2px);
+    }
+    .btn-download .icon {
+      font-size: 20px;
+    }
+
+    @keyframes pulse-red {
+      0%, 100% { box-shadow: 0 0 30px var(--red-glow), inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+      50% { box-shadow: 0 0 50px var(--red-glow), 0 0 80px rgba(255, 0, 60, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: transparent;
+      color: var(--green);
+      padding: 20px 32px;
+      border: 1px solid var(--green-dim);
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover {
+      background: rgba(159, 239, 0, 0.08);
+      box-shadow: 0 0 20px var(--green-glow);
+    }
+
+    .download-meta {
+      margin-top: 20px;
+      font-size: 12px;
+      color: var(--text-faint);
+      letter-spacing: 1px;
+    }
+    .download-meta span { color: var(--green); }
+
+    /* ============ SECTION SHARED ============ */
+    section.content-section {
+      padding: 100px 32px;
+      position: relative;
+      z-index: 2;
+    }
+    .section-wrap { max-width: 1200px; margin: 0 auto; }
+
+    .section-label {
+      font-size: 12px;
+      color: var(--green);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .section-label::before { content: '// '; color: var(--text-dim); }
+
+    .section-title {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      line-height: 1.1;
+      margin-bottom: 32px;
+      color: #fff;
+      letter-spacing: -1px;
+    }
+    .section-title .accent { color: var(--green); }
+
+    /* ============ WHAT IS / WHY ============ */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: start;
+    }
+    .two-col p {
+      color: var(--text);
+      font-size: 1rem;
+      margin-bottom: 20px;
+      line-height: 1.8;
+    }
+    .two-col strong { color: var(--green); font-weight: 600; }
+
+    /* Terminal block */
+    .terminal {
+      background: var(--bg-deep);
+      border: 1px solid var(--panel-border);
+      border-radius: 4px;
+      padding: 0;
+      font-family: var(--mono);
+      font-size: 13px;
+      overflow: hidden;
+      position: relative;
+    }
+    .terminal-header {
+      background: #0c1311;
+      border-bottom: 1px solid var(--panel-border);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .terminal-header .dot {
+      width: 11px; height: 11px; border-radius: 50%;
+      background: #2a3530;
+    }
+    .terminal-header .dot.green { background: var(--green-dim); }
+    .terminal-header .label {
+      margin-left: 16px;
+      color: var(--text-dim);
+      font-size: 11px;
+      letter-spacing: 1px;
+    }
+    .terminal-body {
+      padding: 24px;
+      color: var(--text);
+      line-height: 1.9;
+    }
+    .terminal-body .line { display: block; }
+    .terminal-body .prompt { color: var(--green); margin-right: 8px; }
+    .terminal-body .comment { color: var(--text-dim); }
+    .terminal-body .arrow { color: var(--red); margin: 0 8px; }
+    .terminal-body .keyword { color: var(--green); }
+    .terminal-body .string { color: #ffb86c; }
+
+    /* ============ FLOW DIAGRAM ============ */
+    .flow {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 4px;
+      padding: 48px;
+      margin-top: 32px;
+    }
+    .flow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 24px;
+      padding: 20px 0;
+      border-bottom: 1px dashed var(--panel-border);
+    }
+    .flow-step:last-child { border-bottom: none; }
+    .flow-step .num {
+      font-family: var(--display);
+      font-weight: 700;
+      font-size: 24px;
+      color: var(--green);
+      min-width: 50px;
+      text-shadow: 0 0 10px var(--green-glow);
+    }
+    .flow-step .text strong {
+      color: #fff;
+      font-size: 15px;
+      display: block;
+      margin-bottom: 4px;
+      letter-spacing: 0.5px;
+    }
+    .flow-step .text span {
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+
+    /* ============ FREE KEYS SECTION ============ */
+    .keys-section {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-left: 3px solid var(--green);
+      padding: 40px;
+      margin-top: 32px;
+    }
+    .keys-section h3 {
+      font-family: var(--display);
+      color: var(--green);
+      margin-bottom: 16px;
+      font-size: 20px;
+    }
+    .keys-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 32px;
+    }
+    .key-card {
+      background: var(--bg-deep);
+      border: 1px solid var(--panel-border);
+      padding: 24px;
+      transition: all 0.2s;
+    }
+    .key-card:hover {
+      border-color: var(--green-dim);
+      box-shadow: 0 0 20px rgba(159, 239, 0, 0.1);
+    }
+    .key-card h4 {
+      color: #fff;
+      font-size: 16px;
+      margin-bottom: 6px;
+      font-family: var(--display);
+    }
+    .key-card .badge {
+      display: inline-block;
+      background: rgba(159, 239, 0, 0.15);
+      color: var(--green);
+      padding: 3px 10px;
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      border: 1px solid var(--green-dim);
+      margin-bottom: 14px;
+      text-transform: uppercase;
+    }
+    .key-card p {
+      color: var(--text-dim);
+      font-size: 13px;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+    .key-card a {
+      color: var(--green);
+      text-decoration: none;
+      font-size: 13px;
+      letter-spacing: 1px;
+      border-bottom: 1px solid var(--green-dim);
+      padding-bottom: 2px;
+      transition: all 0.2s;
+    }
+    .key-card a:hover {
+      text-shadow: 0 0 8px var(--green-glow);
+    }
+    .key-card a::after { content: ' →'; }
+
+    /* ============ REQUIREMENTS ============ */
+    .req-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+      margin-top: 32px;
+    }
+    .req-item {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      padding: 28px 24px;
+      text-align: left;
+      transition: all 0.2s;
+    }
+    .req-item:hover {
+      border-color: var(--green-dim);
+      transform: translateY(-2px);
+    }
+    .req-item .label {
+      color: var(--text-dim);
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .req-item .value {
+      color: var(--green);
+      font-family: var(--display);
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    /* ============ SCREENSHOTS ============ */
+    .screenshots {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 32px;
+    }
+    .screenshot {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 4px;
+      overflow: hidden;
+      transition: all 0.3s;
+    }
+    .screenshot:hover {
+      border-color: var(--green-dim);
+      box-shadow: 0 8px 40px rgba(159, 239, 0, 0.1);
+      transform: translateY(-4px);
+    }
+    .screenshot img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .screenshot-placeholder {
+      aspect-ratio: 16/9;
+      background:
+        linear-gradient(135deg, var(--bg-deep), var(--panel)),
+        repeating-linear-gradient(45deg, transparent 0, transparent 10px, rgba(159, 239, 0, 0.03) 10px, rgba(159, 239, 0, 0.03) 20px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-faint);
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .screenshot-label {
+      padding: 14px 20px;
+      background: var(--bg-deep);
+      border-top: 1px solid var(--panel-border);
+      color: var(--text-dim);
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
+    .screenshot-label span { color: var(--green); }
+
+    /* ============ CTA FINAL ============ */
+    .final-cta {
+      text-align: center;
+      padding: 120px 32px;
+      background: linear-gradient(180deg, transparent, rgba(159, 239, 0, 0.03), transparent);
+      position: relative;
+      z-index: 2;
+    }
+    .final-cta h2 {
+      font-family: var(--display);
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      color: #fff;
+      margin-bottom: 24px;
+      letter-spacing: -1px;
+    }
+    .final-cta h2 .accent { color: var(--green); }
+    .final-cta p {
+      color: var(--text-dim);
+      font-size: 15px;
+      margin-bottom: 40px;
+    }
+
+    /* ============ FOOTER ============ */
+    footer {
+      border-top: 1px solid var(--panel-border);
+      padding: 40px 32px;
+      text-align: center;
+      color: var(--text-faint);
+      font-size: 12px;
+      letter-spacing: 1px;
+      position: relative;
+      z-index: 2;
+    }
+    footer a {
+      color: var(--green-dim);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    footer a:hover { color: var(--green); }
+    footer .built {
+      margin-top: 8px;
+      color: var(--text-dim);
+    }
+
+    /* ============ RESPONSIVE ============ */
+    @media (max-width: 900px) {
+      .two-col { grid-template-columns: 1fr; gap: 40px; }
+      .keys-grid { grid-template-columns: 1fr; }
+      .req-grid { grid-template-columns: 1fr 1fr; }
+      .screenshots { grid-template-columns: 1fr; }
+      nav .links { display: none; }
+      .cta-row { flex-direction: column; align-items: stretch; }
+      .btn-download, .btn-secondary { justify-content: center; }
+    }
+
+    /* Selection */
+    ::selection { background: var(--green); color: var(--bg-deep); }
+  </style>
+</head>
+<body>
+  <div class="grid-bg"></div>
+
+  <!-- NAV -->
+  <nav>
+    <div class="wrap">
+      <div class="logo">CONVERGENCE</div>
+      <div class="links">
+        <a href="#what">What</a>
+        <a href="#how">How</a>
+        <a href="#keys">API Keys</a>
+        <a href="#download">Download</a>
+        <a href="https://github.com/agiftakis/convergence" target="_blank">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-tag">v1.0.0 · Windows x64</div>
+      <h1>
+        Four AIs.<br/>
+        One answer.<br/>
+        <span class="accent">Convergence</span>
+      </h1>
+      <p class="subhead">
+        Ask <strong>Claude</strong>, <strong>GPT</strong>, <strong>Gemini</strong>, and <strong>Grok</strong> the same question. Let them debate each other across multiple rounds. Get one synthesized answer that's better than any single model could produce alone.
+      </p>
+      <p class="meta-line">
+        <span>›</span> Runs locally · <span>›</span> Open source · <span>›</span> Free to use · <span>›</span> Bring your own API keys
+      </p>
+
+      <div class="cta-row">
+        <a href="https://github.com/agiftakis/convergence/releases/download/v1.0.0/Convergence_1.0.0_x64-setup.exe" class="btn-download" id="download-btn">
+          <span class="icon">▼</span>
+          Download for Windows — It's FREE
+        </a>
+        <a href="#how" class="btn-secondary">
+          Learn More
+        </a>
+      </div>
+      <div class="download-meta">
+        <span>SIZE:</span> 13.6 MB &nbsp;·&nbsp; <span>OS:</span> Windows 10/11 (64-bit) &nbsp;·&nbsp; <span>VERSION:</span> 1.0.0
+      </div>
+    </div>
+  </section>
+
+  <!-- WHAT IS / WHY -->
+  <section class="content-section" id="what">
+    <div class="section-wrap">
+      <div class="section-label">01 // The Problem</div>
+      <h2 class="section-title">One AI is a <span class="accent">single point of failure</span></h2>
+
+      <div class="two-col">
+        <div>
+          <p>
+            When you ask one AI a question, you get one perspective. That model can be confidently wrong. It can miss edge cases, hallucinate facts, fixate on one approach, or pull from biased training data.
+          </p>
+          <p>
+            <strong>Convergence fixes this</strong> by orchestrating a structured debate between multiple frontier models from different companies. Weak answers get challenged. Strong ones get reinforced. The final synthesized output incorporates the best ideas from all of them — and is meaningfully better than any single model's first attempt.
+          </p>
+          <p>
+            Built as a CEN 3031 Software Engineering project, the entire orchestration logic lives in a Python engine, wrapped in a native Tauri v2 desktop shell. <strong>AI debating AI is the product.</strong>
+          </p>
+        </div>
+
+        <div class="terminal">
+          <div class="terminal-header">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot green"></span>
+            <span class="label">convergence ~ debate.log</span>
+          </div>
+          <div class="terminal-body">
+            <span class="line"><span class="comment"># Round 1 — independent answers</span></span>
+            <span class="line"><span class="prompt">$</span> <span class="keyword">claude</span>     <span class="arrow">→</span> "Use approach A"</span>
+            <span class="line"><span class="prompt">$</span> <span class="keyword">gpt-4</span>      <span class="arrow">→</span> "Approach B is better"</span>
+            <span class="line"><span class="prompt">$</span> <span class="keyword">gemini</span>     <span class="arrow">→</span> "Approach A, but..."</span>
+            <span class="line"><span class="prompt">$</span> <span class="keyword">grok</span>       <span class="arrow">→</span> "Hybrid of A + B"</span>
+            <br/>
+            <span class="line"><span class="comment"># Round 2 — critique &amp; refine</span></span>
+            <span class="line"><span class="prompt">›</span> models converge on hybrid</span>
+            <span class="line"><span class="prompt">›</span> <span class="string">CONVERGENCE DETECTED</span></span>
+            <br/>
+            <span class="line"><span class="comment"># Final synthesis</span></span>
+            <span class="line"><span class="prompt">›</span> <span class="keyword">output</span>: unified answer ✓</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="content-section" id="how">
+    <div class="section-wrap">
+      <div class="section-label">02 // How It Works</div>
+      <h2 class="section-title">From task to <span class="accent">consensus</span> in minutes</h2>
+
+      <div class="flow">
+        <div class="flow-step">
+          <div class="num">01</div>
+          <div class="text">
+            <strong>You submit a task</strong>
+            <span>"Write Python code to convert .epub files to .pdf" — anything from code to research questions.</span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="num">02</div>
+          <div class="text">
+            <strong>Each model answers independently</strong>
+            <span>Round 1: every configured AI writes its first answer in isolation, no knowledge of the others.</span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="num">03</div>
+          <div class="text">
+            <strong>Models critique each other</strong>
+            <span>Round 2+: every AI sees the others' answers, critiques them, refines its own response.</span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="num">04</div>
+          <div class="text">
+            <strong>The engine detects convergence</strong>
+            <span>When the models start agreeing on a core answer, the debate stops automatically (safety cap: 7 rounds).</span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="num">05</div>
+          <div class="text">
+            <strong>Final synthesis</strong>
+            <span>A single, unified answer combining the strongest ideas from every model.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREENSHOTS -->
+  <section class="content-section">
+    <div class="section-wrap">
+      <div class="section-label">03 // The App</div>
+      <h2 class="section-title">Built to <span class="accent">just work</span></h2>
+
+      <div class="screenshots">
+        <div class="screenshot">
+          <img src="screenshot-run.png" alt="Convergence RUN page" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <div class="screenshot-placeholder" style="display:none;">[ screenshot-run.png ]</div>
+          <div class="screenshot-label"><span>›</span> RUN — submit a task to every model</div>
+        </div>
+        <div class="screenshot">
+          <img src="screenshot-settings.png" alt="Convergence SETTINGS page" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <div class="screenshot-placeholder" style="display:none;">[ screenshot-settings.png ]</div>
+          <div class="screenshot-label"><span>›</span> SETTINGS — local API keys, never bundled</div>
+        </div>
+        <div class="screenshot">
+          <img src="screenshot-debate.png" alt="Convergence active debate" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <div class="screenshot-placeholder" style="display:none;">[ screenshot-debate.png ]</div>
+          <div class="screenshot-label"><span>›</span> DEBATE — watch the models converge live</div>
+        </div>
+        <div class="screenshot">
+          <img src="screenshot-history.png" alt="Convergence history page" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <div class="screenshot-placeholder" style="display:none;">[ screenshot-history.png ]</div>
+          <div class="screenshot-label"><span>›</span> HISTORY — every past session, saved locally</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FREE API KEYS -->
+  <section class="content-section" id="keys">
+    <div class="section-wrap">
+      <div class="section-label">04 // API Keys</div>
+      <h2 class="section-title">Run it for <span class="accent">$0</span></h2>
+
+      <div class="keys-section">
+        <h3>›_ The cheapest path: OpenRouter + Gemini</h3>
+        <p style="color: var(--text); margin-bottom: 8px;">
+          You can run Convergence completely free using these two providers. <strong style="color: var(--green);">No credit card required.</strong> You only need one key to start, but two or more is where the magic happens.
+        </p>
+
+        <div class="keys-grid">
+          <div class="key-card">
+            <span class="badge">FREE TIER</span>
+            <h4>OpenRouter</h4>
+            <p>One key, dozens of models. Free-tier models like Llama 3.3 70B run at $0. Sign up with Google or GitHub.</p>
+            <a href="https://openrouter.ai/keys" target="_blank">Get your key</a>
+          </div>
+          <div class="key-card">
+            <span class="badge">FREE TIER</span>
+            <h4>Google Gemini</h4>
+            <p>Generous free-tier limits on all Gemini models. Sign in with any Google account.</p>
+            <a href="https://aistudio.google.com/apikey" target="_blank">Get your key</a>
+          </div>
+          <div class="key-card">
+            <span class="badge" style="background: rgba(255, 0, 60, 0.1); border-color: var(--red); color: var(--red);">PAID</span>
+            <h4>Anthropic (Claude)</h4>
+            <p>Top-tier model for complex reasoning. Pay per token. Requires credit card.</p>
+            <a href="https://console.anthropic.com/settings/keys" target="_blank">Get your key</a>
+          </div>
+          <div class="key-card">
+            <span class="badge" style="background: rgba(255, 0, 60, 0.1); border-color: var(--red); color: var(--red);">PAID</span>
+            <h4>OpenAI (GPT)</h4>
+            <p>The classic. Pay per token. Strong general-purpose model.</p>
+            <a href="https://platform.openai.com/api-keys" target="_blank">Get your key</a>
+          </div>
+          <div class="key-card">
+            <span class="badge" style="background: rgba(255, 0, 60, 0.1); border-color: var(--red); color: var(--red);">PAID</span>
+            <h4>xAI (Grok)</h4>
+            <p>Elon's model. Strong on real-time and unconventional reasoning.</p>
+            <a href="https://console.x.ai/" target="_blank">Get your key</a>
+          </div>
+          <div class="key-card" style="display: flex; align-items: center; justify-content: center; text-align: center;">
+            <div>
+              <div style="color: var(--green); font-family: var(--display); font-size: 28px; font-weight: 700; margin-bottom: 8px;">$0</div>
+              <p style="margin: 0; font-size: 12px;">to start.<br/>OpenRouter + Gemini free tiers cover everything.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REQUIREMENTS -->
+  <section class="content-section">
+    <div class="section-wrap">
+      <div class="section-label">05 // System</div>
+      <h2 class="section-title">Tiny footprint, <span class="accent">fast install</span></h2>
+
+      <div class="req-grid">
+        <div class="req-item">
+          <div class="label">Operating System</div>
+          <div class="value">Win 10/11</div>
+        </div>
+        <div class="req-item">
+          <div class="label">Architecture</div>
+          <div class="value">x64</div>
+        </div>
+        <div class="req-item">
+          <div class="label">Disk Space</div>
+          <div class="value">~50 MB</div>
+        </div>
+        <div class="req-item">
+          <div class="label">Download Size</div>
+          <div class="value">13.6 MB</div>
+        </div>
+      </div>
+
+      <p style="margin-top: 40px; color: var(--text-dim); font-size: 14px; text-align: center;">
+        <span style="color: var(--green);">›</span> No Python, Node.js, or developer tools required. Everything is bundled in the installer.
+      </p>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="final-cta" id="download">
+    <div class="section-wrap">
+      <div class="section-label" style="text-align: center;">// Ready?</div>
+      <h2>Download <span class="accent">Convergence</span> now</h2>
+      <p>Install in under a minute. Run debates between the smartest AIs on the planet.</p>
+      <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 20px;">
+        <a href="https://github.com/agiftakis/convergence/releases/download/v1.0.0/Convergence_1.0.0_x64-setup.exe" class="btn-download">
+          <span class="icon">▼</span>
+          Download for Windows — It's FREE
+        </a>
+        <div class="download-meta">
+          <span>SIZE:</span> 13.6 MB &nbsp;·&nbsp; <span>FILE:</span> Convergence_1.0.0_x64-setup.exe
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div>
+      <a href="https://github.com/agiftakis/convergence" target="_blank">GitHub</a> ·
+      <a href="https://github.com/agiftakis/convergence/blob/main/README.md" target="_blank">Documentation</a> ·
+      <a href="https://github.com/agiftakis/convergence/issues" target="_blank">Report a bug</a>
+    </div>
+    <div class="built">
+      Built by Andy Giftakis · CEN 3031 Software Engineering · 2026
+    </div>
+  </footer>
+
+  <script>
+    // Subtle parallax on hero
+    document.addEventListener('mousemove', (e) => {
+      const tag = document.querySelector('.hero-tag');
+      if (!tag) return;
+      const x = (e.clientX / window.innerWidth - 0.5) * 8;
+      const y = (e.clientY / window.innerHeight - 0.5) * 8;
+      tag.style.transform = `translate(${x}px, ${y}px)`;
+    });
+
+    // Confirmation click on download
+    document.querySelectorAll('.btn-download').forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Could add analytics here later
+        console.log('[convergence] download initiated');
+      });
+    });
+  </script>
+</body>
+</html>
